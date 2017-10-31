@@ -1,0 +1,146 @@
+---
+title: 'Peer-graded Assignment: Prediction Assignment Writeup'
+author: "PG"
+date: "31 October 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Backgroung
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. 
+
+# Goals
+
+The goal of the project is to predict the manner in which they did the exercise. This is the ***classe*** variable in the training set. 
+
+Things to clarify:
+
+- how the model is built;
+- how cross validation is used;
+- determine the expected out of sample error;
+- explain the choices which have been made.
+
+# Exploratory data analysis
+
+The data set is already slpitted in testing and training ones. So we will work in this part of the work oly on the training data set; let's start loading the data:
+```{r}
+har <- read.csv("./data/pml-training.csv", na.strings=c("","NA"))
+```
+Note that we are trnsforming blank cells in NA.  
+We look now for some basic information:
+```{r}
+dim(har)
+```
+So we have `r dim(har)[2]` variables. The partecipants use accelerometers on the belt, forearm, arm, and dumbell. 
+Each of them brings `r length(grep("dumbbell",names(har), value = T))` variables,
+therefore 4x38=152 variables come from there.
+For example for the variable *belt* we have:
+```{r}
+grep("belt",names(har), value = T)
+```
+The remain variables are the first 7:
+```{r}
+names(har)[1:7]
+```
+and the last one, which is the outsome of our analysis:
+```{r}
+names(har)[160]
+```
+
+Let's give a look at the first 7 variables:
+```{r}
+head(har[,1:7])
+```
+So we see the first is just a progressive number, than the name of the partecipant, the next 6 are time/date related.
+
+We can see there are `r length(table(har$user_name))` partecipants:
+```{r}
+table(har$user_name)
+```
+
+We can see moreover that the outcome can take 
+`r length(table(har$classe))` different values:
+```{r}
+table(har$classe)
+```
+The letter A means the exercise was done correctly, the other letters
+mean a common exercise mistake was done.
+
+For the goal of this project we do not need the first 7 variables, so I remove them:
+```{r}
+myData<-har[8:160]
+```
+
+Let's check if there are missing data:
+```{r, cache=TRUE}
+infoNa<-apply(myData, 2, function(x){z<-sum(is.na(x))})
+listNa<-infoNa[infoNa>0]
+print(listNa)
+```
+We see there are `r length(listNa)` variables which contain ***NA*** in 
+`r listNa[1]` rows, on a total of `r dim(myData)[1]`, which correspond to `r round(listNa[1]/dim(myData)[1]*100,1)`%.
+We can therefore safely remove these variables from our data set:
+```{r}
+namesListNa<-names(listNa)
+myData[,namesListNa] <-list(NULL)
+```
+
+
+Finally my data set has the following dimensions:
+```{r}
+dim(myData)
+```
+Moreover, a part the last memmber ***classe*** which is a factor, we can see that there are only member of the classes:
+```{r}
+unique(sapply(myData[-length(myData)],class))
+```
+
+# Slicing Data for Cross Validation
+
+To have a model evaluation, We use a random subsampling to create from our (training) data the sub-training and a sub-test sets:
+
+```{r}
+library(caret)
+set.seed(123)
+inTrain <- createDataPartition(y=myData$classe, p=0.75, list=FALSE)
+training <- myData[inTrain,]
+testing <- myData[-inTrain,]
+```
+We will use them in the next section.
+
+
+# Model building
+
+We are now ready to build a model. Because the outcome is a factor which can takes `r length(table(myData$classe))` values, we use the 
+*random forest* approach. Note that in this case we do not need a preprocessing of the data:
+
+```{r, cache=TRUE}
+library(randomForest)
+set.seed(457)
+system.time(modelFit <-randomForest(classe ~.,data=training))
+```
+
+
+At this point we can check how good is our model, comparing the
+prediction with the test set:
+
+```{r}
+pred<-predict(modelFit, testing)
+confusionMatrix(pred,testing$classe)
+```
+
+We see we have *accuracy*, *Sensitivity* and *Specificity* all above 99%,
+so we can conclude the model works very well.
+
+# Summary
+
+We have build a *random forest* model to predict the manner in which a people do an exercise. This choice comes mainly from the categorical nature of the outcome variable.
+To cross validate the model we splitted the original training data in two sub data, i.e. a training and a testing one.
+According to this we have verified our model has an accuracy above 99%.
+
